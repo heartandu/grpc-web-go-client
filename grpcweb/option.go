@@ -1,7 +1,8 @@
 package grpcweb
 
 import (
-	"google.golang.org/grpc/credentials"
+	"crypto/tls"
+
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/encoding/proto"
 	"google.golang.org/grpc/metadata"
@@ -15,9 +16,9 @@ var (
 )
 
 type dialOptions struct {
-	defaultCallOptions   []CallOption
-	insecure             bool
-	transportCredentials credentials.TransportCredentials
+	defaultCallOptions []CallOption
+	insecure           bool
+	tlsConf            *tls.Config
 }
 
 type DialOption func(*dialOptions)
@@ -34,9 +35,9 @@ func WithInsecure() DialOption {
 	}
 }
 
-func WithTransportCredentials(creds credentials.TransportCredentials) DialOption {
+func WithTLSConfig(conf *tls.Config) DialOption {
 	return func(opt *dialOptions) {
-		opt.transportCredentials = creds
+		opt.tlsConf = conf
 	}
 }
 
