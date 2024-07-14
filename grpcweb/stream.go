@@ -8,13 +8,14 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/parser"
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/transport"
 	"github.com/pkg/errors"
 	"go.uber.org/atomic"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	"github.com/heartandu/grpc-web-go-client/grpcweb/parser"
+	"github.com/heartandu/grpc-web-go-client/grpcweb/transport"
 )
 
 type ClientStream interface {

@@ -1,4 +1,4 @@
-module github.com/ktr0731/grpc-web-go-client
+module github.com/heartandu/grpc-web-go-client
 
 require (
 	github.com/golang/protobuf v1.4.0-rc.4.0.20200313231945-b860323f09d0
