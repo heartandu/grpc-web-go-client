@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/testing/protocmp"
 
-	"github.com/heartandu/grpc-web-go-client/grpcweb/parser"
+	"github.com/ktr0731/grpc-web-go-client/grpcweb/parser"
 )
 
 func TestParseResponseHeader(t *testing.T) {

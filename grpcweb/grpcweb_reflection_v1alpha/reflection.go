@@ -7,7 +7,7 @@ import (
 	grpc "google.golang.org/grpc"
 	pb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 
-	"github.com/heartandu/grpc-web-go-client/grpcweb"
+	"github.com/ktr0731/grpc-web-go-client/grpcweb"
 )
 
 type serverReflectionClient struct {
