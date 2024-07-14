@@ -16,6 +16,8 @@ import (
 	"github.com/ktr0731/grpc-web-go-client/grpcweb/transport"
 )
 
+var ErrInsecureWithTLS = errors.New("insecure and tls configuration couldn't be set simultaniously")
+
 type ClientConn struct {
 	host        string
 	dialOptions *dialOptions
@@ -26,6 +28,11 @@ func DialContext(host string, opts ...DialOption) (*ClientConn, error) {
 	for _, o := range opts {
 		o(&opt)
 	}
+
+	if opt.insecure && opt.tlsConf != nil {
+		return nil, ErrInsecureWithTLS
+	}
+
 	return &ClientConn{
 		host:        host,
 		dialOptions: &opt,
