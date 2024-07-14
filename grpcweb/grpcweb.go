@@ -7,13 +7,16 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/parser"
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/transport"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/ktr0731/grpc-web-go-client/grpcweb/parser"
+	"github.com/ktr0731/grpc-web-go-client/grpcweb/transport"
 )
+
+var ErrInsecureWithTLS = errors.New("insecure and tls configuration couldn't be set simultaniously")
 
 type ClientConn struct {
 	host        string
@@ -25,6 +28,11 @@ func DialContext(host string, opts ...DialOption) (*ClientConn, error) {
 	for _, o := range opts {
 		o(&opt)
 	}
+
+	if opt.insecure && opt.tlsConf != nil {
+		return nil, ErrInsecureWithTLS
+	}
+
 	return &ClientConn{
 		host:        host,
 		dialOptions: &opt,
@@ -35,7 +43,7 @@ func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply inte
 	callOptions := c.applyCallOptions(opts)
 	codec := callOptions.codec
 
-	tr := transport.NewUnary(c.host, nil)
+	tr := transport.NewUnary(c.host, c.connectOptions()...)
 	defer tr.Close()
 
 	r, err := encodeRequestBody(codec, args)
@@ -101,7 +109,7 @@ func (c *ClientConn) NewClientStream(desc *grpc.StreamDesc, method string, opts 
 	if !desc.ClientStreams {
 		return nil, errors.New("not a client stream RPC")
 	}
-	tr, err := transport.NewClientStream(c.host, method)
+	tr, err := transport.NewClientStream(c.host, method, c.connectOptions()...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create a new transport stream")
 	}
@@ -118,7 +126,7 @@ func (c *ClientConn) NewServerStream(desc *grpc.StreamDesc, method string, opts 
 	}
 	return &serverStream{
 		endpoint:    method,
-		transport:   transport.NewUnary(c.host, nil),
+		transport:   transport.NewUnary(c.host, c.connectOptions()...),
 		callOptions: c.applyCallOptions(opts),
 	}, nil
 }
@@ -143,6 +151,19 @@ func (c *ClientConn) applyCallOptions(opts []CallOption) *callOptions {
 		o(&callOptions)
 	}
 	return &callOptions
+}
+
+func (c *ClientConn) connectOptions() []transport.ConnectOption {
+	connOpts := make([]transport.ConnectOption, 0)
+	if c.dialOptions.insecure {
+		connOpts = append(connOpts, transport.WithInsecure())
+	}
+
+	if c.dialOptions.tlsConf != nil {
+		connOpts = append(connOpts, transport.WithTLSConfig(c.dialOptions.tlsConf))
+	}
+
+	return connOpts
 }
 
 // copied from rpc_util.go#msgHeader

@@ -8,13 +8,14 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/parser"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/testing/protocmp"
+
+	"github.com/ktr0731/grpc-web-go-client/grpcweb/parser"
 )
 
 func TestParseResponseHeader(t *testing.T) {
@@ -155,7 +156,7 @@ func TestParseStatusAndTrailer(t *testing.T) {
 				s, err := status.New(codes.Internal, "internal error").WithDetails(
 					&errdetails.BadRequest{
 						FieldViolations: []*errdetails.BadRequest_FieldViolation{
-							&errdetails.BadRequest_FieldViolation{
+							{
 								Field:       "field",
 								Description: "description",
 							},
@@ -163,7 +164,7 @@ func TestParseStatusAndTrailer(t *testing.T) {
 					},
 					&errdetails.PreconditionFailure{
 						Violations: []*errdetails.PreconditionFailure_Violation{
-							&errdetails.PreconditionFailure_Violation{
+							{
 								Type:        "type",
 								Subject:     "subject",
 								Description: "description",

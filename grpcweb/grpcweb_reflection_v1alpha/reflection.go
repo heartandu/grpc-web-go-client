@@ -3,10 +3,11 @@ package grpcweb_reflection_v1alpha
 import (
 	"errors"
 
-	"github.com/ktr0731/grpc-web-go-client/grpcweb"
 	context "golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
 	pb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
+
+	"github.com/ktr0731/grpc-web-go-client/grpcweb"
 )
 
 type serverReflectionClient struct {
@@ -21,7 +22,10 @@ func NewServerReflectionClient(cc *grpcweb.ClientConn) pb.ServerReflectionClient
 	return &serverReflectionClient{cc}
 }
 
-func (c *serverReflectionClient) ServerReflectionInfo(ctx context.Context, opts ...grpc.CallOption) (pb.ServerReflection_ServerReflectionInfoClient, error) {
+func (c *serverReflectionClient) ServerReflectionInfo(
+	ctx context.Context,
+	opts ...grpc.CallOption,
+) (pb.ServerReflection_ServerReflectionInfoClient, error) {
 	if len(opts) != 0 {
 		return nil, errors.New("currently, ktr0731/grpc-web-go-client does not support grpc.CallOption")
 	}

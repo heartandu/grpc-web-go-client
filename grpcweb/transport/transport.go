@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
@@ -23,9 +24,9 @@ type UnaryTransport interface {
 }
 
 type httpTransport struct {
+	scheme string
 	host   string
 	client *http.Client
-	opts   *ConnectOptions
 
 	header http.Header
 
@@ -36,7 +37,11 @@ func (t *httpTransport) Header() http.Header {
 	return t.header
 }
 
-func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, io.ReadCloser, error) {
+func (t *httpTransport) Send(
+	ctx context.Context,
+	endpoint, contentType string,
+	body io.Reader,
+) (http.Header, io.ReadCloser, error) {
 	if t.sent {
 		return nil, nil, errors.New("Send must be called only one time per one Request")
 	}
@@ -44,9 +49,7 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 		t.sent = true
 	}()
 
-	// TODO: HTTPS support.
-	scheme := "http"
-	u := url.URL{Scheme: scheme, Host: t.host, Path: endpoint}
+	u := url.URL{Scheme: t.scheme, Host: t.host, Path: endpoint}
 	url := u.String()
 	req, err := http.NewRequest(http.MethodPost, url, body)
 	if err != nil {
@@ -70,11 +73,29 @@ func (t *httpTransport) Close() error {
 	return nil
 }
 
-var NewUnary = func(host string, opts *ConnectOptions) UnaryTransport {
+var NewUnary = func(host string, opts ...ConnectOption) UnaryTransport {
+	o := new(connectOptions)
+	for _, f := range opts {
+		f(o)
+	}
+
+	scheme := "https"
+	if o.insecure {
+		scheme = "http"
+	}
+
+	client := http.DefaultClient
+	if o.tlsConf != nil {
+		if defTransport, ok := http.DefaultTransport.(*http.Transport); ok {
+			defTransport.TLSClientConfig = o.tlsConf
+			client.Transport = defTransport
+		}
+	}
+
 	return &httpTransport{
+		scheme: scheme,
 		host:   host,
-		client: http.DefaultClient,
-		opts:   opts,
+		client: client,
 		header: make(http.Header),
 	}
 }
@@ -265,13 +286,31 @@ func (t *webSocketTransport) writeMessage(msg int, b []byte) error {
 	return t.conn.WriteMessage(msg, b)
 }
 
-var NewClientStream = func(host, endpoint string) (ClientStreamTransport, error) {
-	// TODO: WebSocket over TLS support.
-	u := url.URL{Scheme: "ws", Host: host, Path: endpoint}
+var NewClientStream = func(host, endpoint string, opts ...ConnectOption) (ClientStreamTransport, error) {
+	o := new(connectOptions)
+	for _, f := range opts {
+		f(o)
+	}
+
+	scheme := "wss"
+	if o.insecure {
+		scheme = "ws"
+	}
+
+	wsDialer := &websocket.Dialer{
+		Proxy:            http.ProxyFromEnvironment,
+		HandshakeTimeout: 45 * time.Second,
+	}
+
+	if o.tlsConf != nil {
+		wsDialer.TLSClientConfig = o.tlsConf
+	}
+
+	u := url.URL{Scheme: scheme, Host: host, Path: endpoint}
 	h := http.Header{}
 	h.Set("Sec-WebSocket-Protocol", "grpc-websockets")
 	var conn *websocket.Conn
-	conn, _, err := websocket.DefaultDialer.Dial(u.String(), h)
+	conn, _, err := wsDialer.Dial(u.String(), h)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to dial to '%s'", u.String())
 	}

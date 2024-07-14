@@ -11,11 +11,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/ktr0731/grpc-test/api"
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/transport"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	"github.com/ktr0731/grpc-web-go-client/grpcweb/transport"
 )
 
 type unaryTransport struct {
@@ -162,7 +163,7 @@ func injectUnaryTransport(t *testing.T, tr transport.UnaryTransport) {
 	t.Cleanup(func() {
 		transport.NewUnary = old
 	})
-	transport.NewUnary = func(string, *transport.ConnectOptions) transport.UnaryTransport {
+	transport.NewUnary = func(string, ...transport.ConnectOption) transport.UnaryTransport {
 		return tr
 	}
 }
@@ -605,7 +606,7 @@ func TestBidiStream(t *testing.T) {
 			if err := stm.Send(ctx, &api.SimpleRequest{Name: "hakase"}); err != nil {
 				t.Fatalf("Send should not return an error, but got '%s'", err)
 			}
-			err = stm.CloseSend()
+			_ = stm.CloseSend()
 
 			var ress []api.SimpleResponse
 			for {
@@ -652,7 +653,7 @@ func injectClientStreamTransport(t *testing.T, tr transport.ClientStreamTranspor
 	t.Cleanup(func() {
 		transport.NewClientStream = old
 	})
-	transport.NewClientStream = func(string, string) (transport.ClientStreamTransport, error) {
+	transport.NewClientStream = func(string, string, ...transport.ConnectOption) (transport.ClientStreamTransport, error) {
 		return tr, nil
 	}
 }
