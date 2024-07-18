@@ -27,8 +27,7 @@ type UnaryTransport interface {
 }
 
 type httpTransport struct {
-	scheme string
-	host   string
+	url    *url.URL
 	client *http.Client
 
 	header http.Header
@@ -52,7 +51,9 @@ func (t *httpTransport) Send(
 		t.sent = true
 	}()
 
-	u := url.URL{Scheme: t.scheme, Host: t.host, Path: endpoint}
+	u := *t.url
+	u.Path += endpoint
+
 	url := u.String()
 	req, err := http.NewRequest(http.MethodPost, url, body)
 	if err != nil {
@@ -80,7 +81,7 @@ func (t *httpTransport) Close() error {
 	return nil
 }
 
-var NewUnary = func(host string, opts ...ConnectOption) UnaryTransport {
+var NewUnary = func(host string, opts ...ConnectOption) (UnaryTransport, error) {
 	o := new(connectOptions)
 	for _, f := range opts {
 		f(o)
@@ -89,6 +90,11 @@ var NewUnary = func(host string, opts ...ConnectOption) UnaryTransport {
 	scheme := "https"
 	if o.insecure {
 		scheme = "http"
+	}
+
+	u, err := url.Parse(fmt.Sprintf("%s://%s", scheme, host))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse host into url")
 	}
 
 	client := http.DefaultClient
@@ -100,11 +106,10 @@ var NewUnary = func(host string, opts ...ConnectOption) UnaryTransport {
 	}
 
 	return &httpTransport{
-		scheme: scheme,
-		host:   host,
+		url:    u,
 		client: client,
 		header: make(http.Header),
-	}
+	}, nil
 }
 
 type ClientStreamTransport interface {
@@ -304,6 +309,11 @@ var NewClientStream = func(host, endpoint string, opts ...ConnectOption) (Client
 		scheme = "ws"
 	}
 
+	u, err := url.Parse(fmt.Sprintf("%s://%s%s", scheme, host, endpoint))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse url")
+	}
+
 	wsDialer := &websocket.Dialer{
 		Proxy:            http.ProxyFromEnvironment,
 		HandshakeTimeout: 45 * time.Second,
@@ -313,11 +323,10 @@ var NewClientStream = func(host, endpoint string, opts ...ConnectOption) (Client
 		wsDialer.TLSClientConfig = o.tlsConf
 	}
 
-	u := url.URL{Scheme: scheme, Host: host, Path: endpoint}
 	h := http.Header{}
 	h.Set("Sec-WebSocket-Protocol", "grpc-websockets")
 	var conn *websocket.Conn
-	conn, _, err := wsDialer.Dial(u.String(), h)
+	conn, _, err = wsDialer.Dial(u.String(), h)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to dial to '%s'", u.String())
 	}
