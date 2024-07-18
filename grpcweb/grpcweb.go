@@ -46,7 +46,10 @@ func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply inte
 	callOptions := c.applyCallOptions(opts)
 	codec := callOptions.codec
 
-	tr := transport.NewUnary(c.host, c.connectOptions()...)
+	tr, err := transport.NewUnary(c.host, c.connectOptions()...)
+	if err != nil {
+		return errors.Wrap(err, "failed to create a new unary transport")
+	}
 	defer tr.Close()
 
 	r, err := encodeRequestBody(codec, args)
@@ -136,9 +139,15 @@ func (c *ClientConn) NewServerStream(desc *grpc.StreamDesc, method string, opts 
 	if !desc.ServerStreams {
 		return nil, errors.New("not a server stream RPC")
 	}
+
+	tr, err := transport.NewUnary(c.host, c.connectOptions()...)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create a new unary transport")
+	}
+
 	return &serverStream{
 		endpoint:    method,
-		transport:   transport.NewUnary(c.host, c.connectOptions()...),
+		transport:   tr,
 		callOptions: c.applyCallOptions(opts),
 	}, nil
 }

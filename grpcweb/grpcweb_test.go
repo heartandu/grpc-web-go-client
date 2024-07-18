@@ -179,8 +179,8 @@ func injectUnaryTransport(t *testing.T, tr transport.UnaryTransport) {
 	t.Cleanup(func() {
 		transport.NewUnary = old
 	})
-	transport.NewUnary = func(string, ...transport.ConnectOption) transport.UnaryTransport {
-		return tr
+	transport.NewUnary = func(string, ...transport.ConnectOption) (transport.UnaryTransport, error) {
+		return tr, nil
 	}
 }
 
