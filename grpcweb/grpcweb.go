@@ -67,7 +67,7 @@ func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply inte
 	header, rawBody, err := tr.Send(ctx, method, contentType, r)
 	if err != nil {
 		if errors.Is(err, transport.ErrInvalidResponseCode) {
-			return status.New(codes.Unknown, err.Error()).Err()
+			return status.New(codes.Unavailable, err.Error()).Err()
 		}
 
 		return errors.Wrap(err, "failed to send the request")
