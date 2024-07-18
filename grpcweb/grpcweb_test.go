@@ -1,6 +1,7 @@
 package grpcweb
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -100,13 +101,28 @@ func TestInvoke(t *testing.T) {
 			expectedStatus: status.New(codes.Internal, "internal error"),
 			wantErr:        true,
 		},
+		"error (empty body)": {
+			transportHeader: http.Header{
+				"Grpc-Status":  []string{"13"},
+				"Grpc-Message": []string{"internal error"},
+			},
+			expectedHeader:  metadata.MD{},
+			expectedTrailer: metadata.MD{},
+			expectedStatus:  status.New(codes.Internal, "internal error"),
+			wantErr:         true,
+		},
 	}
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			r, err := os.Open(filepath.Join("testdata", c.transportContentFileName))
-			if err != nil {
-				t.Fatalf("Open should not return an error, but got '%s'", err)
+			var err error
+
+			r := io.NopCloser(bytes.NewBuffer([]byte{}))
+			if c.transportContentFileName != "" {
+				r, err = os.Open(filepath.Join("testdata", c.transportContentFileName))
+				if err != nil {
+					t.Fatalf("Open should not return an error, but got '%s'", err)
+				}
 			}
 
 			md := metadata.Pairs("yuko", "aioi")

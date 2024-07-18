@@ -6,11 +6,14 @@ import (
 	"encoding/binary"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"github.com/ktr0731/grpc-web-go-client/grpcweb/parser"
 	"github.com/ktr0731/grpc-web-go-client/grpcweb/transport"
@@ -63,12 +66,21 @@ func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply inte
 	contentType := "application/grpc-web+" + codec.Name()
 	header, rawBody, err := tr.Send(ctx, method, contentType, r)
 	if err != nil {
+		if errors.Is(err, transport.ErrInvalidResponseCode) {
+			return status.New(codes.Unavailable, err.Error()).Err()
+		}
+
 		return errors.Wrap(err, "failed to send the request")
 	}
 	defer rawBody.Close()
 
+	md = toMetadata(header)
+	if err := checkStatus(md).Err(); err != nil {
+		return err
+	}
+
 	if callOptions.header != nil {
-		*callOptions.header = toMetadata(header)
+		*callOptions.header = md
 	}
 
 	resHeader, err := parser.ParseResponseHeader(rawBody)
@@ -164,6 +176,31 @@ func (c *ClientConn) connectOptions() []transport.ConnectOption {
 	}
 
 	return connOpts
+}
+
+func checkStatus(md metadata.MD) *status.Status {
+	var (
+		code codes.Code
+		msg  string
+	)
+
+	gs := md.Get("grpc-status")
+	gm := md.Get("grpc-message")
+
+	if len(gs) > 0 {
+		c, err := strconv.ParseUint(gs[0], 10, 32)
+		if err != nil {
+			return status.New(codes.Unknown, "unknown status code "+gs[0])
+		}
+
+		code = codes.Code(c)
+	}
+
+	if len(gm) > 0 {
+		msg = gm[0]
+	}
+
+	return status.New(code, msg)
 }
 
 // copied from rpc_util.go#msgHeader

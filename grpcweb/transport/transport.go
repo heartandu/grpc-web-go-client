@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -16,6 +17,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 )
+
+var ErrInvalidResponseCode = errors.New("received invalid response code")
 
 type UnaryTransport interface {
 	Header() http.Header
@@ -63,6 +66,10 @@ func (t *httpTransport) Send(
 	res, err := t.client.Do(req)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to send the API")
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return nil, nil, fmt.Errorf("%w: %d", ErrInvalidResponseCode, res.StatusCode)
 	}
 
 	return res.Header, res.Body, nil
