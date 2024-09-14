@@ -3,7 +3,7 @@ package parser_test
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -205,7 +205,7 @@ func TestParseStatusAndTrailer(t *testing.T) {
 		c := c
 		t.Run(name, func(t *testing.T) {
 			fpath := filepath.Join("testdata", c.fname)
-			b, err := ioutil.ReadFile(fpath)
+			b, err := os.ReadFile(fpath)
 			if err != nil {
 				t.Fatalf("Open should not return an error, but got '%s'", err)
 			}

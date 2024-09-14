@@ -248,8 +248,8 @@ func encodeRequestBody(codec encoding.CodecV2, in interface{}) (io.Reader, error
 		return nil, errors.Wrap(err, "failed to marshal the request body")
 	}
 	buf := bytes.NewBuffer(make([]byte, 0, headerLen+len(body)))
-	buf.Write(header(body.Len()))
-	buf.ReadFrom(body.Reader())
+	_, _ = buf.Write(header(body.Len()))
+	_, _ = buf.ReadFrom(body.Reader())
 	return buf, nil
 }
 
