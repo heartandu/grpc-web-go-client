@@ -270,7 +270,7 @@ func TestServerStream(t *testing.T) {
 			}
 
 			ctx := metadata.NewOutgoingContext(context.Background(), md)
-			stm, err := client.NewServerStream(ctx, &grpc.StreamDesc{ServerStreams: true}, "/service/Method")
+			stm, err := client.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, "/service/Method")
 			if err != nil {
 				t.Fatalf("should not return an error, but got '%s'", err)
 			}
@@ -466,7 +466,7 @@ func TestClientStream(t *testing.T) {
 			}
 
 			ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("yuko", "aioi"))
-			stm, err := client.NewClientStream(ctx, &grpc.StreamDesc{ClientStreams: true}, "/service/Method")
+			stm, err := client.NewStream(ctx, &grpc.StreamDesc{ClientStreams: true}, "/service/Method")
 			if err != nil {
 				t.Fatalf("should not return an error, but got '%s'", err)
 			}
@@ -615,7 +615,7 @@ func TestBidiStream(t *testing.T) {
 			}
 
 			ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("yuko", "aioi"))
-			stm, err := client.NewBidiStream(ctx, &grpc.StreamDesc{ClientStreams: true, ServerStreams: true}, "/service/Method")
+			stm, err := client.NewStream(ctx, &grpc.StreamDesc{ClientStreams: true, ServerStreams: true}, "/service/Method")
 			if err != nil {
 				t.Fatalf("should not return an error, but got '%s'", err)
 			}

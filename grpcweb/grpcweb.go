@@ -20,7 +20,10 @@ import (
 	"github.com/heartandu/grpc-web-go-client/grpcweb/transport"
 )
 
-var ErrInsecureWithTLS = errors.New("insecure and tls configuration couldn't be set simultaniously")
+var (
+	ErrInsecureWithTLS      = errors.New("insecure and tls configuration couldn't be set simultaniously")
+	ErrNotAStreamingRequest = errors.New("not a streaming request")
+)
 
 type ClientConn struct {
 	host        string
@@ -121,19 +124,30 @@ func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply inte
 	return status.Err()
 }
 
-func (c *ClientConn) NewClientStream(
+func (c *ClientConn) NewStream(
 	ctx context.Context,
 	desc *grpc.StreamDesc,
 	method string,
 	opts ...CallOption,
 ) (Stream, error) {
-	if !desc.ClientStreams {
-		return nil, errors.New("not a client stream RPC")
+	switch {
+	case desc.ClientStreams && desc.ServerStreams:
+		return c.newBidiStream(ctx, method, opts...)
+	case desc.ClientStreams:
+		return c.newClientStream(ctx, method, opts...)
+	case desc.ServerStreams:
+		return c.newServerStream(ctx, method, opts...)
+	default:
+		return nil, ErrNotAStreamingRequest
 	}
+}
+
+func (c *ClientConn) newClientStream(ctx context.Context, method string, opts ...CallOption) (Stream, error) {
 	tr, err := transport.NewClientStream(c.host, method, c.connectOptions()...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create a new transport stream")
 	}
+
 	return &clientStream{
 		ctx:         ctx,
 		endpoint:    method,
@@ -142,16 +156,7 @@ func (c *ClientConn) NewClientStream(
 	}, nil
 }
 
-func (c *ClientConn) NewServerStream(
-	ctx context.Context,
-	desc *grpc.StreamDesc,
-	method string,
-	opts ...CallOption,
-) (Stream, error) {
-	if !desc.ServerStreams {
-		return nil, errors.New("not a server stream RPC")
-	}
-
+func (c *ClientConn) newServerStream(ctx context.Context, method string, opts ...CallOption) (Stream, error) {
 	tr, err := transport.NewUnary(c.host, c.connectOptions()...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create a new unary transport")
@@ -165,19 +170,12 @@ func (c *ClientConn) NewServerStream(
 	}, nil
 }
 
-func (c *ClientConn) NewBidiStream(
-	ctx context.Context,
-	desc *grpc.StreamDesc,
-	method string,
-	opts ...CallOption,
-) (Stream, error) {
-	if !desc.ServerStreams || !desc.ClientStreams {
-		return nil, errors.New("not a bidi stream RPC")
-	}
-	stream, err := c.NewClientStream(ctx, desc, method, opts...)
+func (c *ClientConn) newBidiStream(ctx context.Context, method string, opts ...CallOption) (Stream, error) {
+	stream, err := c.newClientStream(ctx, method, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create a new client stream")
 	}
+
 	return &bidiStream{
 		clientStream: stream.(*clientStream),
 	}, nil

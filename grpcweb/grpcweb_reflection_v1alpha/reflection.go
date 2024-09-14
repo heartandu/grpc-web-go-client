@@ -30,9 +30,9 @@ func (c *serverReflectionClient) ServerReflectionInfo(
 		return nil, errors.New("currently, heartandu/grpc-web-go-client does not support grpc.CallOption")
 	}
 
-	stream, err := c.cc.NewBidiStream(
+	stream, err := c.cc.NewStream(
 		ctx,
-		&grpc.StreamDesc{ServerStreams: true, ClientStreams: true},
+		&grpc.StreamDesc{StreamName: "ServerReflectionInfo", ServerStreams: true, ClientStreams: true},
 		"/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
 	)
 	if err != nil {
