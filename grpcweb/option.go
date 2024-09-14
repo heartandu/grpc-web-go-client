@@ -11,7 +11,7 @@ import (
 var (
 	defaultDialOptions = dialOptions{}
 	defaultCallOptions = callOptions{
-		codec: encoding.GetCodec(proto.Name),
+		codec: encoding.GetCodecV2(proto.Name),
 	}
 )
 
@@ -42,7 +42,7 @@ func WithTLSConfig(conf *tls.Config) DialOption {
 }
 
 type callOptions struct {
-	codec           encoding.Codec
+	codec           encoding.CodecV2
 	header, trailer *metadata.MD
 }
 
@@ -50,7 +50,7 @@ type CallOption func(*callOptions)
 
 func CallContentSubtype(contentSubtype string) CallOption {
 	return func(opt *callOptions) {
-		opt.codec = encoding.GetCodec(contentSubtype)
+		opt.codec = encoding.GetCodecV2(contentSubtype)
 	}
 }
 

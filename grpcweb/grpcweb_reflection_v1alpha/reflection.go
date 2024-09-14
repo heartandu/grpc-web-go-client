@@ -7,7 +7,7 @@ import (
 	grpc "google.golang.org/grpc"
 	pb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 
-	"github.com/ktr0731/grpc-web-go-client/grpcweb"
+	"github.com/heartandu/grpc-web-go-client/grpcweb"
 )
 
 type serverReflectionClient struct {
@@ -27,12 +27,14 @@ func (c *serverReflectionClient) ServerReflectionInfo(
 	opts ...grpc.CallOption,
 ) (pb.ServerReflection_ServerReflectionInfoClient, error) {
 	if len(opts) != 0 {
-		return nil, errors.New("currently, ktr0731/grpc-web-go-client does not support grpc.CallOption")
+		return nil, errors.New("currently, heartandu/grpc-web-go-client does not support grpc.CallOption")
 	}
 
-	stream, err := c.cc.NewBidiStream(
-		&grpc.StreamDesc{ServerStreams: true, ClientStreams: true},
-		"/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo")
+	stream, err := c.cc.NewStream(
+		ctx,
+		&grpc.StreamDesc{StreamName: "ServerReflectionInfo", ServerStreams: true, ClientStreams: true},
+		"/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -42,19 +44,19 @@ func (c *serverReflectionClient) ServerReflectionInfo(
 
 type serverReflectionServerReflectionInfoClient struct {
 	ctx    context.Context
-	stream grpcweb.BidiStream
+	stream grpcweb.Stream
 
 	// To satisfy pb.ServerReflection_ServerReflectionInfoClient
 	grpc.ClientStream
 }
 
 func (x *serverReflectionServerReflectionInfoClient) Send(m *pb.ServerReflectionRequest) error {
-	return x.stream.Send(x.ctx, m)
+	return x.stream.SendMsg(m)
 }
 
 func (x *serverReflectionServerReflectionInfoClient) Recv() (*pb.ServerReflectionResponse, error) {
 	var res pb.ServerReflectionResponse
-	err := x.stream.Receive(x.ctx, &res)
+	err := x.stream.RecvMsg(&res)
 	if err != nil {
 		return nil, err
 	}

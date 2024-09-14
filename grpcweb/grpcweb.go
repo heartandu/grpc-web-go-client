@@ -12,21 +12,25 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/parser"
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/transport"
+	"github.com/heartandu/grpc-web-go-client/grpcweb/parser"
+	"github.com/heartandu/grpc-web-go-client/grpcweb/transport"
 )
 
-var ErrInsecureWithTLS = errors.New("insecure and tls configuration couldn't be set simultaniously")
+var (
+	ErrInsecureWithTLS      = errors.New("insecure and tls configuration couldn't be set simultaniously")
+	ErrNotAStreamingRequest = errors.New("not a streaming request")
+)
 
 type ClientConn struct {
 	host        string
 	dialOptions *dialOptions
 }
 
-func DialContext(host string, opts ...DialOption) (*ClientConn, error) {
+func NewClient(host string, opts ...DialOption) (*ClientConn, error) {
 	opt := defaultDialOptions
 	for _, o := range opts {
 		o(&opt)
@@ -96,7 +100,7 @@ func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply inte
 		if err != nil {
 			return errors.Wrap(err, "failed to parse the response body")
 		}
-		if err := codec.Unmarshal(resBody, reply); err != nil {
+		if err := codec.Unmarshal([]mem.Buffer{mem.NewBuffer(&resBody, nil)}, reply); err != nil {
 			return errors.Wrapf(err, "failed to unmarshal response body by codec %s", codec.Name())
 		}
 
@@ -120,46 +124,58 @@ func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply inte
 	return status.Err()
 }
 
-func (c *ClientConn) NewClientStream(desc *grpc.StreamDesc, method string, opts ...CallOption) (ClientStream, error) {
-	if !desc.ClientStreams {
-		return nil, errors.New("not a client stream RPC")
+func (c *ClientConn) NewStream(
+	ctx context.Context,
+	desc *grpc.StreamDesc,
+	method string,
+	opts ...CallOption,
+) (Stream, error) {
+	switch {
+	case desc.ClientStreams && desc.ServerStreams:
+		return c.newBidiStream(ctx, method, opts...)
+	case desc.ClientStreams:
+		return c.newClientStream(ctx, method, opts...)
+	case desc.ServerStreams:
+		return c.newServerStream(ctx, method, opts...)
+	default:
+		return nil, ErrNotAStreamingRequest
 	}
+}
+
+func (c *ClientConn) newClientStream(ctx context.Context, method string, opts ...CallOption) (Stream, error) {
 	tr, err := transport.NewClientStream(c.host, method, c.connectOptions()...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create a new transport stream")
 	}
+
 	return &clientStream{
+		ctx:         ctx,
 		endpoint:    method,
 		transport:   tr,
 		callOptions: c.applyCallOptions(opts),
 	}, nil
 }
 
-func (c *ClientConn) NewServerStream(desc *grpc.StreamDesc, method string, opts ...CallOption) (ServerStream, error) {
-	if !desc.ServerStreams {
-		return nil, errors.New("not a server stream RPC")
-	}
-
+func (c *ClientConn) newServerStream(ctx context.Context, method string, opts ...CallOption) (Stream, error) {
 	tr, err := transport.NewUnary(c.host, c.connectOptions()...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create a new unary transport")
 	}
 
 	return &serverStream{
+		ctx:         ctx,
 		endpoint:    method,
 		transport:   tr,
 		callOptions: c.applyCallOptions(opts),
 	}, nil
 }
 
-func (c *ClientConn) NewBidiStream(desc *grpc.StreamDesc, method string, opts ...CallOption) (BidiStream, error) {
-	if !desc.ServerStreams || !desc.ClientStreams {
-		return nil, errors.New("not a bidi stream RPC")
-	}
-	stream, err := c.NewClientStream(desc, method, opts...)
+func (c *ClientConn) newBidiStream(ctx context.Context, method string, opts ...CallOption) (Stream, error) {
+	stream, err := c.newClientStream(ctx, method, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create a new client stream")
 	}
+
 	return &bidiStream{
 		clientStream: stream.(*clientStream),
 	}, nil
@@ -215,23 +231,23 @@ func checkStatus(md metadata.MD) *status.Status {
 // copied from rpc_util.go#msgHeader
 const headerLen = 5
 
-func header(body []byte) []byte {
+func header(bodyLen int) []byte {
 	h := make([]byte, 5)
 	h[0] = byte(0)
-	binary.BigEndian.PutUint32(h[1:], uint32(len(body)))
+	binary.BigEndian.PutUint32(h[1:], uint32(bodyLen))
 	return h
 }
 
 // header (compressed-flag(1) + message-length(4)) + body
 // TODO: compressed message
-func encodeRequestBody(codec encoding.Codec, in interface{}) (io.Reader, error) {
+func encodeRequestBody(codec encoding.CodecV2, in interface{}) (io.Reader, error) {
 	body, err := codec.Marshal(in)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal the request body")
 	}
 	buf := bytes.NewBuffer(make([]byte, 0, headerLen+len(body)))
-	buf.Write(header(body))
-	buf.Write(body)
+	_, _ = buf.Write(header(body.Len()))
+	_, _ = buf.ReadFrom(body.Reader())
 	return buf, nil
 }
 

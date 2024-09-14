@@ -17,7 +17,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/transport"
+	"github.com/heartandu/grpc-web-go-client/grpcweb/transport"
 )
 
 type unaryTransport struct {
@@ -135,9 +135,9 @@ func TestInvoke(t *testing.T) {
 			})
 
 			var header, trailer metadata.MD
-			client, err := DialContext(":50051")
+			client, err := NewClient(":50051")
 			if err != nil {
-				t.Fatalf("DialContext should not return an error, but got '%s'", err)
+				t.Fatalf("NewClient should not return an error, but got '%s'", err)
 			}
 
 			var res api.SimpleResponse
@@ -264,25 +264,25 @@ func TestServerStream(t *testing.T) {
 				r:          r,
 			})
 
-			client, err := DialContext(":50051")
+			client, err := NewClient(":50051")
 			if err != nil {
-				t.Fatalf("DialContext should not return an error, but got '%s'", err)
+				t.Fatalf("NewClient should not return an error, but got '%s'", err)
 			}
 
-			stm, err := client.NewServerStream(&grpc.StreamDesc{ServerStreams: true}, "/service/Method")
+			ctx := metadata.NewOutgoingContext(context.Background(), md)
+			stm, err := client.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, "/service/Method")
 			if err != nil {
 				t.Fatalf("should not return an error, but got '%s'", err)
 			}
 
-			ctx := metadata.NewOutgoingContext(context.Background(), md)
-			if err := stm.Send(ctx, &api.SimpleRequest{Name: "nano"}); err != nil {
+			if err := stm.SendMsg(&api.SimpleRequest{Name: "nano"}); err != nil {
 				t.Fatalf("Send should not return an error, but got '%s'", err)
 			}
 
 			var ress []api.SimpleResponse
 			for {
 				var res api.SimpleResponse
-				err = stm.Receive(ctx, &res) // Don't create scoped error
+				err = stm.RecvMsg(&res) // Don't create scoped error
 				if errors.Is(err, io.EOF) {
 					err = nil
 					break
@@ -460,26 +460,30 @@ func TestClientStream(t *testing.T) {
 				err:            c.transportErr,
 			})
 
-			client, err := DialContext(":50051")
+			client, err := NewClient(":50051")
 			if err != nil {
-				t.Fatalf("DialContext should not return an error, but got '%s'", err)
+				t.Fatalf("NewClient should not return an error, but got '%s'", err)
 			}
 
-			stm, err := client.NewClientStream(&grpc.StreamDesc{ClientStreams: true}, "/service/Method")
+			ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("yuko", "aioi"))
+			stm, err := client.NewStream(ctx, &grpc.StreamDesc{ClientStreams: true}, "/service/Method")
 			if err != nil {
 				t.Fatalf("should not return an error, but got '%s'", err)
 			}
 
-			ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("yuko", "aioi"))
-			if err := stm.Send(ctx, &api.SimpleRequest{Name: "nano"}); err != nil {
+			if err := stm.SendMsg(&api.SimpleRequest{Name: "nano"}); err != nil {
 				t.Fatalf("Send should not return an error, but got '%s'", err)
 			}
-			if err := stm.Send(ctx, &api.SimpleRequest{Name: "hakase"}); err != nil {
+			if err := stm.SendMsg(&api.SimpleRequest{Name: "hakase"}); err != nil {
 				t.Fatalf("Send should not return an error, but got '%s'", err)
 			}
 
 			var res api.SimpleResponse
-			err = stm.CloseAndReceive(ctx, &res)
+			if err = stm.CloseSend(); err != nil {
+				t.Fatalf("CloseSend should not return an error, but got %q", err)
+			}
+
+			err = stm.RecvMsg(&res)
 
 			stat := status.Convert(err)
 
@@ -605,21 +609,21 @@ func TestBidiStream(t *testing.T) {
 				err:            c.transportErr,
 			})
 
-			client, err := DialContext(":50051")
+			client, err := NewClient(":50051")
 			if err != nil {
-				t.Fatalf("DialContext should not return an error, but got '%s'", err)
+				t.Fatalf("NewClient should not return an error, but got '%s'", err)
 			}
 
-			stm, err := client.NewBidiStream(&grpc.StreamDesc{ClientStreams: true, ServerStreams: true}, "/service/Method")
+			ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("yuko", "aioi"))
+			stm, err := client.NewStream(ctx, &grpc.StreamDesc{ClientStreams: true, ServerStreams: true}, "/service/Method")
 			if err != nil {
 				t.Fatalf("should not return an error, but got '%s'", err)
 			}
 
-			ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("yuko", "aioi"))
-			if err := stm.Send(ctx, &api.SimpleRequest{Name: "nano"}); err != nil {
+			if err := stm.SendMsg(&api.SimpleRequest{Name: "nano"}); err != nil {
 				t.Fatalf("Send should not return an error, but got '%s'", err)
 			}
-			if err := stm.Send(ctx, &api.SimpleRequest{Name: "hakase"}); err != nil {
+			if err := stm.SendMsg(&api.SimpleRequest{Name: "hakase"}); err != nil {
 				t.Fatalf("Send should not return an error, but got '%s'", err)
 			}
 			_ = stm.CloseSend()
@@ -627,7 +631,7 @@ func TestBidiStream(t *testing.T) {
 			var ress []api.SimpleResponse
 			for {
 				var res api.SimpleResponse
-				err = stm.Receive(ctx, &res) // Don't create scoped error
+				err = stm.RecvMsg(&res) // Don't create scoped error
 				if errors.Is(err, io.EOF) {
 					err = nil
 					break

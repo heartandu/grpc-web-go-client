@@ -1,15 +1,11 @@
 # gRPC Web Go client
-[![GoDoc](https://godoc.org/github.com/ktr0731/grpc-web-go-client/grpcweb?status.svg)](https://godoc.org/github.com/ktr0731/grpc-web-go-client/grpcweb)
-[![GitHub Actions](https://github.com/ktr0731/grpc-web-go-client/workflows/main/badge.svg)](https://github.com/ktr0731/grpc-web-go-client/actions)  
+[![GoDoc](https://godoc.org/github.com/heartandu/grpc-web-go-client/grpcweb?status.svg)](https://godoc.org/github.com/heartandu/grpc-web-go-client/grpcweb)
 
 *THE IMPLEMENTATION IS LACKING*
 
 gRPC Web client written in Go.
 
-
 ## Usage
-The server is [here](github.com/ktr0731/grpc-test).  
-
 Send an unary request.
 
 ``` go
@@ -18,107 +14,127 @@ client := grpcweb.NewClient("localhost:50051")
 in, out := new(api.SimpleRequest), new(api.SimpleResponse)
 in.Name = "ktr"
 
-// You can get the endpoint from grpcweb.ToEndpoint function with descriptors.
-// However, I write directly in this example.
-req := grpcweb.NewRequest("/api.Example/Unary", in, out)
-
-res, err := client.Unary(context.Background(), req)
-if err != nil {
-  log.Fatal(err)
+if err := client.Invoke(context.Background(), "/api.Example/Unary", in, out); err != nil {
+    log.Fatal(err)
 }
 
 // hello, ktr
-fmt.Println(res.Content.(*api.SimpleResponse).GetMessage())
+fmt.Println(out.GetMessage())
 ```
 
 Send a server-side streaming request.
-``` go
-req := grpcweb.NewRequest("/api.Example/ServerStreaming", in, out)
 
-stream, err := client.ServerStreaming(context.Background(), req)
+``` go
+streamDesc := &grps.StreamDesc{
+    StreamName:    "ServerStreaming",
+    ServerStreams: true,
+}
+
+stream, err := client.NewStream(context.Background(), streamDesc, "/api.Example/ServerStreaming")
 if err != nil {
-  log.Fatal(err)
+    log.Fatal(err)
+}
+
+in := new(api.SimpleRequest)
+in.Name = "ktr"
+
+if err := stream.SendMsg(in); err != nil {
+    log.Fatalf(err)
+}
+
+if err := stream.CloseSend(); err != nil {
+    log.Fatalf(err)
 }
 
 for {
-  res, err := stream.Receive()
-  if err == io.EOF {
-    break
-  }
-  if err != nil {
-    log.Fatal(err)
-  }
-  fmt.Println(res.Content.(*api.SimpleResponse).GetMessage())
+    res := new(api.SimpleResponse)
+    if err := stream.RecvMsg(res); err != nil {
+        if errors.Is(err, io.EOF) {
+            break
+        }
+
+        log.Fatalf(err)
+    }
+
+    log.Println(res.GetMessage())
 }
 ```
 
-Send an client-side streaming request.
+Send a client-side streaming request.
 ``` go
-stream, err := client.ClientStreaming(context.Background())
+streamDesc := &gprc.StreamDesc{
+    StreamName:    "ClientStreaming",
+    ClientStreams: true,
+}
+
+stream, err := client.NewStream(context.Background(), streamDesc, "/api.Example/ClientStreaming")
 if err != nil {
-  log.Fatal(err)
+    log.Fatal(err)
 }
 
 in, out := new(api.SimpleRequest), new(api.SimpleResponse)
 in.Name = "ktr"
-req := grpcweb.NewRequest("/api.Example/ClientStreaming", in, out)
 
 for i := 0; i < 10; i++ {
-  err := stream.Send(req)
-  if err == io.EOF {
-    break
-  }
-  if err != nil {
-    log.Fatal(err)
-  }
+    if err := stream.SendMsg(in); err != nil {
+        log.Fatal(err)
+    }
 }
 
-res, err := stream.CloseAndReceive()
-if err != nil {
-  log.Fatal(err)
+if err := stream.CloseSend(); err != nil {
+    log.Fatal(err)
+}
+
+if err := stream.RecvMsg(out); err != nil {
+    log.Fatal(err)
 }
 
 // ktr, you greet 10 times.
-fmt.Println(res.Content.(*api.SimpleResponse).GetMessage())
+fmt.Println(out.GetMessage())
 ```
 
 Send a bidirectional streaming request.
 ``` go
-in, out := new(api.SimpleRequest), new(api.SimpleResponse)
-req := grpcweb.NewRequest("/api.Example/BidiStreaming", in, out)
+streamDesc := &grpc.StreamDesc{
+    StreamName:      "BidiStreaming",
+    ClientStreaming: true,
+    ServerStreaming: true,
+}
 
-stream := client.BidiStreaming(context.Background(), req)
+stream, err := client.NewStream(context.Background(), streamDesc, "/api.Example/BidiStreaming")
+if err != nil {
+    log.Fatal(err)
+}
 
 go func() {
-  for {
-    res, err := stream.Receive()
-    if err == grpcweb.ErrConnectionClosed {
-      return
+    for {
+        out := new(api.SimpleResponse)
+
+        if err := stream.RecvMsg(out); err != nil {
+            if errors.Is(err, io.EOF) {
+                return
+            }
+
+            log.Fatal(err)
+        }
+
+        fmt.Println(res.GetMessage())
     }
-    if err != nil {
-      log.Fatal(err)
-    }
-    fmt.Println(res.Content.(*api.SimpleResponse).GetMessage())
-  }
 }()
 
 for i := 0; i < 2; i++ {
-  in.Name = fmt.Sprintf("ktr%d", i+1)
-  req := grpcweb.NewRequest("/api.Example/BidiStreaming", in, out)
+    in := new(api.SimpleRequest)
+    in.Name = fmt.Sprintf("ktr%d", i+1)
 
-  err := stream.Send(req)
-  if err == io.EOF {
-    break
-  }
-  if err != nil {
-    log.Fatal(err)
-  }
+    if err := stream.SendMsg(in); err != nil {
+        if err == io.EOF {
+            break
+        }
+
+        log.Fatal(err)
+    }
 }
 
 // wait a moment to get responses.
 time.Sleep(10 * time.Second)
-
-if err := stream.Close(); err != nil {
-  log.Fatal(err)
-}
 ```

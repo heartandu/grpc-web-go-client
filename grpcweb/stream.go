@@ -3,6 +3,7 @@ package grpcweb
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -11,14 +12,16 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/atomic"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/parser"
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/transport"
+	"github.com/heartandu/grpc-web-go-client/grpcweb/parser"
+	"github.com/heartandu/grpc-web-go-client/grpcweb/transport"
 )
 
-type ClientStream interface {
+// Stream is an interface that represents a generic stream of messages.
+type Stream interface {
 	// Header returns the header metadata from the server, if there is any.
 	// It blocks if the metadata is not ready to read.
 	Header() (metadata.MD, error)
@@ -26,11 +29,18 @@ type ClientStream interface {
 	// It must only be called after stream.CloseAndReceive has returned, or
 	// stream.Receive has returned a non-nil error (including io.EOF).
 	Trailer() metadata.MD
-	Send(ctx context.Context, req interface{}) error
-	CloseAndReceive(ctx context.Context, res interface{}) error
+	// Context returns the context associated with the stream.
+	Context() context.Context
+	// CloseSend closes the sending side of the stream and returns any error that occurred.
+	CloseSend() error
+	// SendMsg sends a message on the stream and returns any error that occurred.
+	SendMsg(m any) error
+	// RecvMsg receives a message from the stream and returns any error that occurred.
+	RecvMsg(m any) error
 }
 
 type clientStream struct {
+	ctx         context.Context
 	endpoint    string
 	transport   transport.ClientStreamTransport
 	callOptions *callOptions
@@ -83,14 +93,28 @@ func (s *clientStream) trailer() metadata.MD {
 	return s.trailerMD
 }
 
-func (s *clientStream) Send(ctx context.Context, req interface{}) error {
+func (s *clientStream) Context() context.Context {
+	return s.ctx
+}
+
+func (s *clientStream) CloseSend() error {
+	if err := s.transport.CloseSend(); err != nil {
+		return fmt.Errorf("failed to close the send stream: %w", err)
+	}
+
+	s.closed.Store(true)
+
+	return nil
+}
+
+func (s *clientStream) SendMsg(req any) error {
 	r, err := encodeRequestBody(s.callOptions.codec, req)
 	if err != nil {
 		return errors.Wrap(err, "failed to build the request")
 	}
 
 	h := make(http.Header)
-	md, ok := metadata.FromOutgoingContext(ctx)
+	md, ok := metadata.FromOutgoingContext(s.ctx)
 	if ok {
 		for k, v := range md {
 			for _, vv := range v {
@@ -100,20 +124,14 @@ func (s *clientStream) Send(ctx context.Context, req interface{}) error {
 	}
 	s.transport.SetRequestHeader(h)
 
-	if err := s.transport.Send(ctx, r); err != nil {
+	if err := s.transport.Send(s.ctx, r); err != nil {
 		return errors.Wrap(err, "failed to send the request")
 	}
 	return nil
 }
 
-func (s *clientStream) CloseAndReceive(ctx context.Context, res interface{}) error {
-	if err := s.transport.CloseSend(); err != nil {
-		return errors.Wrap(err, "failed to close the send stream")
-	}
-
-	s.closed.Store(true)
-
-	rawBody, err := s.transport.Receive(ctx)
+func (s *clientStream) RecvMsg(res any) error {
+	rawBody, err := s.transport.Receive(s.ctx)
 	if s.isTrailerOnly(err) {
 		// Parse headers as trailers.
 		trailer, err := s.Header()
@@ -146,14 +164,14 @@ func (s *clientStream) CloseAndReceive(ctx context.Context, res interface{}) err
 			return errors.Wrap(err, "failed to parse the response body")
 		}
 		codec := s.callOptions.codec
-		if err := codec.Unmarshal(resBody, res); err != nil {
+		if err := codec.Unmarshal([]mem.Buffer{mem.NewBuffer(&resBody, nil)}, res); err != nil {
 			return errors.Wrapf(err, "failed to unmarshal response body by codec %s", codec.Name())
 		}
 
 		closeOnce.Do(func() { rawBody.Close() })
 
 		// improbable-eng/grpc-web returns the trailer in another message.
-		rawBody2, err := s.transport.Receive(ctx)
+		rawBody2, err := s.transport.Receive(s.ctx)
 		if err != nil {
 			return errors.Wrap(err, "failed to receive the response trailer")
 		}
@@ -183,19 +201,8 @@ func (s *clientStream) isTrailerOnly(err error) bool {
 	return errors.Is(err, io.ErrUnexpectedEOF) && s.trailer().Len() == 0
 }
 
-type ServerStream interface {
-	// Header returns the header metadata from the server, if there is any.
-	// It blocks if the metadata is not ready to read.
-	Header() (metadata.MD, error)
-	// Trailer returns the trailer metadata from the server, if there is any.
-	// It must only be called after stream.CloseAndReceive has returned, or
-	// stream.Receive has returned a non-nil error (including io.EOF).
-	Trailer() metadata.MD
-	Send(ctx context.Context, req interface{}) error
-	Receive(ctx context.Context, res interface{}) error
-}
-
 type serverStream struct {
+	ctx         context.Context
 	endpoint    string
 	transport   transport.UnaryTransport
 	resStream   io.ReadCloser
@@ -216,7 +223,15 @@ func (s *serverStream) Trailer() metadata.MD {
 	return s.trailer
 }
 
-func (s *serverStream) Send(ctx context.Context, req interface{}) error {
+func (s *serverStream) Context() context.Context {
+	return s.ctx
+}
+
+func (s *serverStream) CloseSend() error {
+	return nil
+}
+
+func (s *serverStream) SendMsg(req any) error {
 	codec := s.callOptions.codec
 
 	r, err := encodeRequestBody(codec, req)
@@ -224,7 +239,7 @@ func (s *serverStream) Send(ctx context.Context, req interface{}) error {
 		return errors.Wrap(err, "failed to build the request body")
 	}
 
-	md, ok := metadata.FromOutgoingContext(ctx)
+	md, ok := metadata.FromOutgoingContext(s.ctx)
 	if ok {
 		for k, v := range md {
 			for _, vv := range v {
@@ -234,7 +249,7 @@ func (s *serverStream) Send(ctx context.Context, req interface{}) error {
 	}
 
 	contentType := "application/grpc-web+" + codec.Name()
-	header, rawBody, err := s.transport.Send(ctx, s.endpoint, contentType, r)
+	header, rawBody, err := s.transport.Send(s.ctx, s.endpoint, contentType, r)
 	if err != nil {
 		return errors.Wrap(err, "failed to send the request")
 	}
@@ -243,7 +258,7 @@ func (s *serverStream) Send(ctx context.Context, req interface{}) error {
 	return nil
 }
 
-func (s *serverStream) Receive(ctx context.Context, res interface{}) (err error) {
+func (s *serverStream) RecvMsg(res any) (err error) {
 	if s.resStream == nil {
 		return errors.New("Receive must be call after calling Send")
 	}
@@ -275,7 +290,7 @@ func (s *serverStream) Receive(ctx context.Context, res interface{}) (err error)
 		if err != nil {
 			return err
 		}
-		if err := s.callOptions.codec.Unmarshal(msg, res); err != nil {
+		if err := s.callOptions.codec.Unmarshal([]mem.Buffer{mem.NewBuffer(&msg, nil)}, res); err != nil {
 			return errors.Wrap(err, "failed to unmarshal response body")
 		}
 		return nil
@@ -293,19 +308,6 @@ func (s *serverStream) Receive(ctx context.Context, res interface{}) (err error)
 	return io.EOF
 }
 
-type BidiStream interface {
-	// Header returns the header metadata from the server, if there is any.
-	// It blocks if the metadata is not ready to read.
-	Header() (metadata.MD, error)
-	// Trailer returns the trailer metadata from the server, if there is any.
-	// It must only be called after stream.CloseAndReceive has returned, or
-	// stream.Receive has returned a non-nil error (including io.EOF).
-	Trailer() metadata.MD
-	Send(ctx context.Context, req interface{}) error
-	Receive(ctx context.Context, res interface{}) error
-	CloseSend() error
-}
-
 type bidiStream struct {
 	*clientStream
 
@@ -317,12 +319,12 @@ var (
 	gRPCStatusBytes          = []byte("grpc-status: ")
 )
 
-func (s *bidiStream) Receive(ctx context.Context, res interface{}) error {
+func (s *bidiStream) RecvMsg(res any) error {
 	if s.closed.Load() {
 		return io.EOF
 	}
 
-	rawBody, err := s.transport.Receive(ctx)
+	rawBody, err := s.transport.Receive(s.ctx)
 	if s.isTrailerOnly(err) {
 		// Trailers-only responses, no message.
 
@@ -357,7 +359,7 @@ func (s *bidiStream) Receive(ctx context.Context, res interface{}) error {
 		if err != nil {
 			return err
 		}
-		if err := s.callOptions.codec.Unmarshal(msg, res); err != nil {
+		if err := s.callOptions.codec.Unmarshal([]mem.Buffer{mem.NewBuffer(&msg, nil)}, res); err != nil {
 			return errors.Wrap(err, "failed to unmarshal response body")
 		}
 		return nil

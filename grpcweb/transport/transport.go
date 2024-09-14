@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -177,9 +176,9 @@ func (t *webSocketTransport) Send(ctx context.Context, body io.Reader) error {
 		h.Set("content-type", "application/grpc-web+proto")
 		h.Set("x-grpc-web", "1")
 		var b bytes.Buffer
-		h.Write(&b)
+		_ = h.Write(&b)
 
-		t.writeMessage(websocket.BinaryMessage, b.Bytes())
+		err = t.writeMessage(websocket.BinaryMessage, b.Bytes())
 	})
 	if err != nil {
 		return err
@@ -262,14 +261,14 @@ func (t *webSocketTransport) Receive(context.Context) (_ io.ReadCloser, err erro
 		return
 	}
 
-	res := ioutil.NopCloser(io.MultiReader(&buf, r))
+	res := io.NopCloser(io.MultiReader(&buf, r))
 
-	by, err := ioutil.ReadAll(res)
+	by, err := io.ReadAll(res)
 	if err != nil {
 		panic(err)
 	}
 
-	res = ioutil.NopCloser(bytes.NewReader(by))
+	res = io.NopCloser(bytes.NewReader(by))
 
 	return res, nil
 }
@@ -277,7 +276,10 @@ func (t *webSocketTransport) Receive(context.Context) (_ io.ReadCloser, err erro
 func (t *webSocketTransport) CloseSend() error {
 	// 0x01 means the finish send frame.
 	// ref. transports/websocket/websocket.ts
-	t.writeMessage(websocket.BinaryMessage, []byte{0x01})
+	if err := t.writeMessage(websocket.BinaryMessage, []byte{0x01}); err != nil {
+		return fmt.Errorf("failed to write message to a websocket: %w", err)
+	}
+
 	return nil
 }
 

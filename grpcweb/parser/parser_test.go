@@ -3,7 +3,7 @@ package parser_test
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/testing/protocmp"
 
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/parser"
+	"github.com/heartandu/grpc-web-go-client/grpcweb/parser"
 )
 
 func TestParseResponseHeader(t *testing.T) {
@@ -205,7 +205,7 @@ func TestParseStatusAndTrailer(t *testing.T) {
 		c := c
 		t.Run(name, func(t *testing.T) {
 			fpath := filepath.Join("testdata", c.fname)
-			b, err := ioutil.ReadFile(fpath)
+			b, err := os.ReadFile(fpath)
 			if err != nil {
 				t.Fatalf("Open should not return an error, but got '%s'", err)
 			}
