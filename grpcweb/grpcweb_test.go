@@ -135,9 +135,9 @@ func TestInvoke(t *testing.T) {
 			})
 
 			var header, trailer metadata.MD
-			client, err := DialContext(":50051")
+			client, err := NewClient(":50051")
 			if err != nil {
-				t.Fatalf("DialContext should not return an error, but got '%s'", err)
+				t.Fatalf("NewClient should not return an error, but got '%s'", err)
 			}
 
 			var res api.SimpleResponse
@@ -264,9 +264,9 @@ func TestServerStream(t *testing.T) {
 				r:          r,
 			})
 
-			client, err := DialContext(":50051")
+			client, err := NewClient(":50051")
 			if err != nil {
-				t.Fatalf("DialContext should not return an error, but got '%s'", err)
+				t.Fatalf("NewClient should not return an error, but got '%s'", err)
 			}
 
 			ctx := metadata.NewOutgoingContext(context.Background(), md)
@@ -460,9 +460,9 @@ func TestClientStream(t *testing.T) {
 				err:            c.transportErr,
 			})
 
-			client, err := DialContext(":50051")
+			client, err := NewClient(":50051")
 			if err != nil {
-				t.Fatalf("DialContext should not return an error, but got '%s'", err)
+				t.Fatalf("NewClient should not return an error, but got '%s'", err)
 			}
 
 			ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("yuko", "aioi"))
@@ -609,9 +609,9 @@ func TestBidiStream(t *testing.T) {
 				err:            c.transportErr,
 			})
 
-			client, err := DialContext(":50051")
+			client, err := NewClient(":50051")
 			if err != nil {
-				t.Fatalf("DialContext should not return an error, but got '%s'", err)
+				t.Fatalf("NewClient should not return an error, but got '%s'", err)
 			}
 
 			ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("yuko", "aioi"))

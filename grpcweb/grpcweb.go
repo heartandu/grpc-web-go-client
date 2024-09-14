@@ -27,7 +27,7 @@ type ClientConn struct {
 	dialOptions *dialOptions
 }
 
-func DialContext(host string, opts ...DialOption) (*ClientConn, error) {
+func NewClient(host string, opts ...DialOption) (*ClientConn, error) {
 	opt := defaultDialOptions
 	for _, o := range opts {
 		o(&opt)
