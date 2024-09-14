@@ -31,8 +31,10 @@ func (c *serverReflectionClient) ServerReflectionInfo(
 	}
 
 	stream, err := c.cc.NewBidiStream(
+		ctx,
 		&grpc.StreamDesc{ServerStreams: true, ClientStreams: true},
-		"/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo")
+		"/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -42,19 +44,19 @@ func (c *serverReflectionClient) ServerReflectionInfo(
 
 type serverReflectionServerReflectionInfoClient struct {
 	ctx    context.Context
-	stream grpcweb.BidiStream
+	stream grpcweb.Stream
 
 	// To satisfy pb.ServerReflection_ServerReflectionInfoClient
 	grpc.ClientStream
 }
 
 func (x *serverReflectionServerReflectionInfoClient) Send(m *pb.ServerReflectionRequest) error {
-	return x.stream.Send(x.ctx, m)
+	return x.stream.SendMsg(m)
 }
 
 func (x *serverReflectionServerReflectionInfoClient) Recv() (*pb.ServerReflectionResponse, error) {
 	var res pb.ServerReflectionResponse
-	err := x.stream.Receive(x.ctx, &res)
+	err := x.stream.RecvMsg(&res)
 	if err != nil {
 		return nil, err
 	}
