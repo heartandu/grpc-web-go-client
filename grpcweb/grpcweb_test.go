@@ -17,7 +17,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/transport"
+	"github.com/heartandu/grpc-web-go-client/grpcweb/transport"
 )
 
 type unaryTransport struct {

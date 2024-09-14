@@ -1,16 +1,23 @@
-module github.com/ktr0731/grpc-web-go-client
+module github.com/heartandu/grpc-web-go-client
+
+go 1.21
 
 require (
-	github.com/golang/protobuf v1.4.0-rc.4.0.20200313231945-b860323f09d0
-	github.com/google/go-cmp v0.4.0
-	github.com/gorilla/websocket v1.4.1
+	github.com/golang/protobuf v1.5.4
+	github.com/google/go-cmp v0.6.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/ktr0731/grpc-test v0.1.4
 	github.com/pkg/errors v0.9.1
-	go.uber.org/atomic v1.6.0
-	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
-	google.golang.org/genproto v0.0.0-20200204235621-fb4a7afc5178
-	google.golang.org/grpc v1.27.1
-	google.golang.org/protobuf v1.21.0
+	go.uber.org/atomic v1.11.0
+	golang.org/x/net v0.29.0
+	google.golang.org/genproto v0.0.0-20240903143218-8af14fe29dc1
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1
+	google.golang.org/grpc v1.66.2
+	google.golang.org/protobuf v1.34.2
 )
 
-go 1.13
+require (
+	github.com/stretchr/testify v1.9.0 // indirect
+	golang.org/x/sys v0.25.0 // indirect
+	golang.org/x/text v0.18.0 // indirect
+)

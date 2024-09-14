@@ -11,11 +11,12 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/atomic"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/parser"
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/transport"
+	"github.com/heartandu/grpc-web-go-client/grpcweb/parser"
+	"github.com/heartandu/grpc-web-go-client/grpcweb/transport"
 )
 
 type ClientStream interface {
@@ -146,7 +147,7 @@ func (s *clientStream) CloseAndReceive(ctx context.Context, res interface{}) err
 			return errors.Wrap(err, "failed to parse the response body")
 		}
 		codec := s.callOptions.codec
-		if err := codec.Unmarshal(resBody, res); err != nil {
+		if err := codec.Unmarshal([]mem.Buffer{mem.NewBuffer(&resBody, nil)}, res); err != nil {
 			return errors.Wrapf(err, "failed to unmarshal response body by codec %s", codec.Name())
 		}
 
@@ -275,7 +276,7 @@ func (s *serverStream) Receive(ctx context.Context, res interface{}) (err error)
 		if err != nil {
 			return err
 		}
-		if err := s.callOptions.codec.Unmarshal(msg, res); err != nil {
+		if err := s.callOptions.codec.Unmarshal([]mem.Buffer{mem.NewBuffer(&msg, nil)}, res); err != nil {
 			return errors.Wrap(err, "failed to unmarshal response body")
 		}
 		return nil
@@ -357,7 +358,7 @@ func (s *bidiStream) Receive(ctx context.Context, res interface{}) error {
 		if err != nil {
 			return err
 		}
-		if err := s.callOptions.codec.Unmarshal(msg, res); err != nil {
+		if err := s.callOptions.codec.Unmarshal([]mem.Buffer{mem.NewBuffer(&msg, nil)}, res); err != nil {
 			return errors.Wrap(err, "failed to unmarshal response body")
 		}
 		return nil

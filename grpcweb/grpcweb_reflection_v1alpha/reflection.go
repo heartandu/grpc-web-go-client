@@ -7,7 +7,7 @@ import (
 	grpc "google.golang.org/grpc"
 	pb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 
-	"github.com/ktr0731/grpc-web-go-client/grpcweb"
+	"github.com/heartandu/grpc-web-go-client/grpcweb"
 )
 
 type serverReflectionClient struct {
@@ -27,7 +27,7 @@ func (c *serverReflectionClient) ServerReflectionInfo(
 	opts ...grpc.CallOption,
 ) (pb.ServerReflection_ServerReflectionInfoClient, error) {
 	if len(opts) != 0 {
-		return nil, errors.New("currently, ktr0731/grpc-web-go-client does not support grpc.CallOption")
+		return nil, errors.New("currently, heartandu/grpc-web-go-client does not support grpc.CallOption")
 	}
 
 	stream, err := c.cc.NewBidiStream(

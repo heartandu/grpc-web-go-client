@@ -12,11 +12,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/parser"
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/transport"
+	"github.com/heartandu/grpc-web-go-client/grpcweb/parser"
+	"github.com/heartandu/grpc-web-go-client/grpcweb/transport"
 )
 
 var ErrInsecureWithTLS = errors.New("insecure and tls configuration couldn't be set simultaniously")
@@ -96,7 +97,7 @@ func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply inte
 		if err != nil {
 			return errors.Wrap(err, "failed to parse the response body")
 		}
-		if err := codec.Unmarshal(resBody, reply); err != nil {
+		if err := codec.Unmarshal([]mem.Buffer{mem.NewBuffer(&resBody, nil)}, reply); err != nil {
 			return errors.Wrapf(err, "failed to unmarshal response body by codec %s", codec.Name())
 		}
 
@@ -215,23 +216,23 @@ func checkStatus(md metadata.MD) *status.Status {
 // copied from rpc_util.go#msgHeader
 const headerLen = 5
 
-func header(body []byte) []byte {
+func header(bodyLen int) []byte {
 	h := make([]byte, 5)
 	h[0] = byte(0)
-	binary.BigEndian.PutUint32(h[1:], uint32(len(body)))
+	binary.BigEndian.PutUint32(h[1:], uint32(bodyLen))
 	return h
 }
 
 // header (compressed-flag(1) + message-length(4)) + body
 // TODO: compressed message
-func encodeRequestBody(codec encoding.Codec, in interface{}) (io.Reader, error) {
+func encodeRequestBody(codec encoding.CodecV2, in interface{}) (io.Reader, error) {
 	body, err := codec.Marshal(in)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal the request body")
 	}
 	buf := bytes.NewBuffer(make([]byte, 0, headerLen+len(body)))
-	buf.Write(header(body))
-	buf.Write(body)
+	buf.Write(header(body.Len()))
+	buf.ReadFrom(body.Reader())
 	return buf, nil
 }
 
