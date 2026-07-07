@@ -91,8 +91,16 @@ func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply inte
 	}
 
 	resHeader, err := parser.ParseResponseHeader(rawBody)
-	if err != nil {
+	if err != nil && err != io.EOF {
 		return errors.Wrap(err, "failed to parse response header")
+	}
+
+	// Edge case: got zero length response header, parse trailer header immediately.
+	if err == io.EOF {
+		resHeader, err = parser.ParseResponseHeader(rawBody)
+		if err != nil {
+			return errors.Wrap(err, "failed to parse trailer response header")
+		}
 	}
 
 	if resHeader.IsMessageHeader() {
@@ -106,7 +114,7 @@ func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply inte
 
 		resHeader, err = parser.ParseResponseHeader(rawBody)
 		if err != nil {
-			return errors.Wrap(err, "failed to parse response header")
+			return errors.Wrap(err, "failed to parse trailer response header")
 		}
 	}
 	if !resHeader.IsTrailerHeader() {

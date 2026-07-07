@@ -87,6 +87,20 @@ func TestInvoke(t *testing.T) {
 			expectedContent: api.SimpleResponse{Message: "response"},
 			expectedStatus:  status.New(codes.OK, ""),
 		},
+		"normal (trailer and zero length response)": {
+			transportHeader:          header,
+			transportContentFileName: "empty_response.in",
+			expectedHeader: metadata.New(map[string]string{
+				"hakase": "shinonome",
+				"nano":   "shinonome",
+			}),
+			expectedTrailer: metadata.New(map[string]string{
+				"trailer_key1": "trailer_val1",
+				"trailer_key2": "trailer_val2",
+			}),
+			expectedContent: api.SimpleResponse{},
+			expectedStatus:  status.New(codes.OK, ""),
+		},
 		"error (trailer and response)": {
 			transportHeader:          header,
 			transportContentFileName: "trailer_response_error.in",
